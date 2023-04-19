@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package api;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/whitekid/grpcx/proto";
+
+service SampleService {
+  rpc echo(google.protobuf.StringValue) returns (google.protobuf.StringValue) {
+  };
+  rpc echox(google.protobuf.StringValue) returns (google.protobuf.StringValue) {
+  };
+}
