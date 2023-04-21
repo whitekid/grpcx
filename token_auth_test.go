@@ -7,11 +7,8 @@ import (
 	"testing"
 
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
-	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/stretchr/testify/require"
-	"github.com/whitekid/goxp/log"
 	"github.com/whitekid/grpcx/proto"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -74,34 +71,13 @@ func TestTokenAuth(t *testing.T) {
 
 	service := &serviceImpl{}
 
-	logger := log.Zap(log.New(zap.AddCallerSkip(2)))
-
-	unaryInterceptors := []grpc.UnaryServerInterceptor{
-		grpc_zap.UnaryServerInterceptor(logger),
-	}
-	unaryInterceptors = append(unaryInterceptors, service.UnrayInterceptor()...)
-
-	streamInterceptors := []grpc.StreamServerInterceptor{
-		grpc_zap.StreamServerInterceptor(logger),
-	}
-	streamInterceptors = append(streamInterceptors, service.StreamInterceptor()...)
-
-	g := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(unaryInterceptors...),
-		grpc.ChainStreamInterceptor(streamInterceptors...),
-	)
-
-	proto.RegisterSampleServiceServer(g, service)
-
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
-	go g.Serve(ln)
-
-	go func() {
-		<-ctx.Done()
-		ln.Close()
-	}()
+	serve(ctx, ln,
+		grpc.ChainUnaryInterceptor(service.UnrayInterceptor()...),
+		grpc.ChainStreamInterceptor(service.StreamInterceptor()...),
+	)
 
 	tokenAuth := NewTokenAuth("")
 	conn, err := grpc.DialContext(ctx, ln.Addr().String(),
@@ -130,7 +106,7 @@ func TestTokenAuth(t *testing.T) {
 			tokenAuth.SetToken(tt.args.token)
 
 			got, err := tt.args.fn(ctx, wrapperspb.String(value))
-			require.Truef(t, (err != nil) == tt.wantErr, `echo() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
+			require.Truef(t, (err != nil) == tt.wantErr, `%v failed: error = %+v, wantErr = %v`, tt.args.fn, err, tt.wantErr)
 			if tt.wantErr {
 				return
 			}
