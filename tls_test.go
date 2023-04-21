@@ -15,17 +15,18 @@ import (
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/stretchr/testify/require"
 	"github.com/whitekid/goxp/log"
-	"github.com/whitekid/grpcx/proto"
 	"github.com/whitekid/x509x"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/whitekid/grpcx/proto"
 )
 
 // generateKeyPair generate certificate and returns cert and private key as PEM format
 func generateKeyPair(t *testing.T, commonName string, ipAddr string) ([]byte, []byte) {
-	privKey, err := x509x.GenerateKey(x509.ECDSAWithSHA512)
+	privKey, err := x509x.GenerateKey(x509.ECDSAWithSHA256)
 	require.NoError(t, err)
 
 	template := &x509.Certificate{
@@ -46,15 +47,17 @@ func generateKeyPair(t *testing.T, commonName string, ipAddr string) ([]byte, []
 }
 
 func serve(ctx context.Context, ln net.Listener, opt ...grpc.ServerOption) {
-	logger := log.Zap(log.New(zap.AddCallerSkip(2)))
+	s := &serviceImpl{}
 
+	logger := log.Zap(log.New(zap.AddCallerSkip(2)))
 	opt = append(opt,
 		grpc.ChainUnaryInterceptor(grpc_zap.UnaryServerInterceptor(logger)),
+		grpc.ChainUnaryInterceptor(s.UnrayInterceptor()...),
 		grpc.ChainStreamInterceptor(grpc_zap.StreamServerInterceptor(logger)),
 	)
 
 	g := grpc.NewServer(opt...)
-	proto.RegisterSampleServiceServer(g, &serviceImpl{})
+	proto.RegisterSampleServiceServer(g, s)
 
 	go func() {
 		<-ctx.Done()
@@ -95,6 +98,7 @@ func TestServerSideTLS(t *testing.T) {
 	require.NoError(t, err)
 
 	testEcho(ctx, t, conn)
+
 }
 
 func TestWithMutualTLS(t *testing.T) {
@@ -103,16 +107,18 @@ func TestWithMutualTLS(t *testing.T) {
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
+	addr := ln.Addr().(*net.TCPAddr).IP.String()
 
-	serverCertPEM, serverPrivKeyPEM := generateKeyPair(t, "server", ln.Addr().(*net.TCPAddr).IP.String())
+	serverCertPEM, serverPrivKeyPEM := generateKeyPair(t, "server", addr)
 
 	certServer, err := tls.X509KeyPair(serverCertPEM, serverPrivKeyPEM)
 	require.NoError(t, err)
 
-	clientCerts := make([]tls.Certificate, 10)
+	clientCerts := make([]tls.Certificate, 1000)
 	serverCertPool := x509.NewCertPool()
+
 	for i := 0; i < len(clientCerts); i++ {
-		clientCertPEM, clientPrivKeyPEM := generateKeyPair(t, fmt.Sprintf("client %d", i+1), ln.Addr().(*net.TCPAddr).IP.String())
+		clientCertPEM, clientPrivKeyPEM := generateKeyPair(t, fmt.Sprintf("client %d", i+1), addr)
 		clientCerts[i], err = tls.X509KeyPair(clientCertPEM, clientPrivKeyPEM)
 		require.NoError(t, err)
 
@@ -140,5 +146,7 @@ func TestWithMutualTLS(t *testing.T) {
 		require.NoError(t, err)
 
 		testEcho(ctx, t, conn)
+
+		conn.Close()
 	}
 }

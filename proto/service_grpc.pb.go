@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -20,8 +21,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	SampleService_Echo_FullMethodName  = "/api.SampleService/echo"
-	SampleService_Echox_FullMethodName = "/api.SampleService/echox"
+	SampleService_Echo_FullMethodName       = "/api.SampleService/Echo"
+	SampleService_Echox_FullMethodName      = "/api.SampleService/Echox"
+	SampleService_RaiseError_FullMethodName = "/api.SampleService/RaiseError"
 )
 
 // SampleServiceClient is the client API for SampleService service.
@@ -30,6 +32,7 @@ const (
 type SampleServiceClient interface {
 	Echo(ctx context.Context, in *wrapperspb.StringValue, opts ...grpc.CallOption) (*wrapperspb.StringValue, error)
 	Echox(ctx context.Context, in *wrapperspb.StringValue, opts ...grpc.CallOption) (*wrapperspb.StringValue, error)
+	RaiseError(ctx context.Context, in *wrapperspb.UInt32Value, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type sampleServiceClient struct {
@@ -58,12 +61,22 @@ func (c *sampleServiceClient) Echox(ctx context.Context, in *wrapperspb.StringVa
 	return out, nil
 }
 
+func (c *sampleServiceClient) RaiseError(ctx context.Context, in *wrapperspb.UInt32Value, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, SampleService_RaiseError_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SampleServiceServer is the server API for SampleService service.
 // All implementations must embed UnimplementedSampleServiceServer
 // for forward compatibility
 type SampleServiceServer interface {
 	Echo(context.Context, *wrapperspb.StringValue) (*wrapperspb.StringValue, error)
 	Echox(context.Context, *wrapperspb.StringValue) (*wrapperspb.StringValue, error)
+	RaiseError(context.Context, *wrapperspb.UInt32Value) (*emptypb.Empty, error)
 	mustEmbedUnimplementedSampleServiceServer()
 }
 
@@ -76,6 +89,9 @@ func (UnimplementedSampleServiceServer) Echo(context.Context, *wrapperspb.String
 }
 func (UnimplementedSampleServiceServer) Echox(context.Context, *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Echox not implemented")
+}
+func (UnimplementedSampleServiceServer) RaiseError(context.Context, *wrapperspb.UInt32Value) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RaiseError not implemented")
 }
 func (UnimplementedSampleServiceServer) mustEmbedUnimplementedSampleServiceServer() {}
 
@@ -126,6 +142,24 @@ func _SampleService_Echox_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SampleService_RaiseError_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(wrapperspb.UInt32Value)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SampleServiceServer).RaiseError(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SampleService_RaiseError_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SampleServiceServer).RaiseError(ctx, req.(*wrapperspb.UInt32Value))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SampleService_ServiceDesc is the grpc.ServiceDesc for SampleService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -134,12 +168,16 @@ var SampleService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*SampleServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "echo",
+			MethodName: "Echo",
 			Handler:    _SampleService_Echo_Handler,
 		},
 		{
-			MethodName: "echox",
+			MethodName: "Echox",
 			Handler:    _SampleService_Echox_Handler,
+		},
+		{
+			MethodName: "RaiseError",
+			Handler:    _SampleService_RaiseError_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

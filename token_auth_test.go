@@ -3,67 +3,15 @@ package grpcx
 import (
 	"context"
 	"net"
-	"strings"
 	"testing"
 
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	"github.com/stretchr/testify/require"
-	"github.com/whitekid/grpcx/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/whitekid/grpcx/proto"
 )
-
-type serviceImpl struct {
-	proto.UnimplementedSampleServiceServer
-}
-
-func (s *serviceImpl) Echo(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-	return wrapperspb.String(req.Value), nil
-}
-
-func (s *serviceImpl) Echox(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-	return wrapperspb.String(req.Value), nil
-}
-
-func (s *serviceImpl) UnrayInterceptor() []grpc.UnaryServerInterceptor {
-	return []grpc.UnaryServerInterceptor{s.authInterceptor()}
-}
-
-var authMap = map[string]string{
-	"echo":  "",
-	"echox": "required",
-}
-
-func (s *serviceImpl) authInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		p := strings.Split(info.FullMethod, "/")
-		method := p[len(p)-1]
-
-		auth, ok := authMap[method]
-		if !ok {
-			auth = "required"
-		}
-
-		switch auth {
-		case "": // no authentication
-		case "required": // user required
-			_, err := grpc_auth.AuthFromMD(ctx, "bearer")
-			if err != nil {
-				return nil, err
-			}
-
-		default:
-			return nil, status.Errorf(codes.Internal, "invalid auth method: %v", auth)
-		}
-
-		return handler(ctx, req)
-	}
-}
-
-func (s *serviceImpl) StreamInterceptor() []grpc.StreamServerInterceptor { return nil }
 
 func TestTokenAuth(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
